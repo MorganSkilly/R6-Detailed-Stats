@@ -1,222 +1,135 @@
-﻿using CefSharp;
-using CefSharp.OffScreen;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Discord;
+using Discord.Commands;
+using Discord.WebSocket;
+using HtmlAgilityPack;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace R6DetailedStats
 {
     class Program
     {
-        private static bool started = false, stop = false, browserLoaded = false;
-        private const string version = "0.0.1";
-        private static ConsoleKeyInfo keyInfo;
-        private const bool displayDebug = false;
-        private static DiscordBot R6DiscordBot;
-        private static ChromiumWebBrowser browser;
-        private const string testurl = "https://r6.tracker.network/profile/pc/AbuseAndDesfuse/operators?seasonal=1";
-        private static string jsOutput = "null";
+        static private DiscordSocketClient _client;
+        static private CommandService _commands;
+        static private IServiceProvider _services;
 
-        static void StartBrowser()
+        private static bool isRunning = false;
+
+        static void Main(string[] args) => new Program().RunBotAsync().GetAwaiter().GetResult();
+        public async Task RunBotAsync()
         {
-            CefSharpSettings.SubprocessExitIfParentProcessClosed = true;
-            var settings = new CefSettings()
+            _client = new DiscordSocketClient();
+            _commands = new CommandService();
+
+            _services = new ServiceCollection()
+                .AddSingleton(_client)
+                .AddSingleton(_commands)
+                .BuildServiceProvider();
+
+            string token = "NzIzMzU4NzE3OTI3NjIwNjQw.Xuz-fQ.nM2J1SRSpZzVeTXObTYBLEVmyLc";
+
+            _client.Log += _client_Log;
+
+            await RegisterCommandsAsync();
+
+            await _client.LoginAsync(TokenType.Bot, token);
+
+            await _client.StartAsync();
+
+            await Task.Delay(-1);
+
+        }
+
+        private Task _client_Log(LogMessage arg)
+        {
+            Console.WriteLine(arg);
+            return Task.CompletedTask;
+        }
+
+        public async Task RegisterCommandsAsync()
+        {
+            _client.MessageReceived += HandleCommandAsync;
+            await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+        }
+
+        private async Task HandleCommandAsync(SocketMessage arg)
+        {
+            var message = arg as SocketUserMessage;
+
+            var context = new SocketCommandContext(_client, message);
+            if (message.Author.IsBot)
+                return;
+
+            Console.WriteLine(message.ToString());
+
+            int argPos = 0;
+            if (message.HasStringPrefix("!", ref argPos))
             {
-                CachePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CefSharp/Cache")
-            };
-            Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null);
-            browser = new ChromiumWebBrowser(testurl);
-            browser.LoadingStateChanged += BrowserLoadingStateChanged;
-
-            OutputString("DEBUG", "browser initialised");
-
-            while (!browserLoaded)
-            {
-                OutputString("DEBUG", "loading browser window");
-            }
-        }
-
-        private static void BrowserLoadingStateChanged(object sender, LoadingStateChangedEventArgs e)
-        {
-            if (!e.IsLoading)
-            {
-                OutputString("DEBUG", $"page {testurl} loaded");
-                browserLoaded = true;
-            }
-            else
-            {
-                OutputString("DEBUG", $"page {testurl} is loading");
-                browserLoaded = false;
-            }
-        }
-
-        static void Start()
-        {
-            OutputString("BUILD", $"VERSION: {version}");
-            OutputString("DEBUG", "start tick");
-
-            StartBrowser();
-            started = true;
-
-            R6DiscordBot = new DiscordBot("https://discordapp.com/api/webhooks/723230554798948474/pRrkub-hThHh0eehV2-IyCwigZadlXzQbdmvLaAcEKOTaaa-rJUr9q3kjD-gTIHleQU7", "R6 Stats Bot", "https://cdn.discordapp.com/avatars/251440518658129923/a_62c5797990f35c8927e542037bef3031.gif");
-
-            bool invalid = true;
-
-            while (invalid)
-            {
-                Clear();
-
-                OutputString("BUILD", "PRESS ENTER TO START");
-                Console.WriteLine();
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{DateTime.Now.ToString("HH:mm:ss")} | ");
-                keyInfo = Console.ReadKey();
-                Console.WriteLine();
-                ConsoleKey consoleKeyPressed = keyInfo.Key;
-                Console.ResetColor();
-
-                switch (consoleKeyPressed)
-                {
-                    case ConsoleKey.Enter:
-                        OutputString("DEBUG", "enter key pressed");
-                        SendWebhookSimple($"Program started by {Environment.MachineName.ToString()}!");
-                        invalid = false;
-                        break;
-                    default:
-                        OutputString("DEBUG", "invalid key pressed");
-                        break;
-                }
-            }
-        }
-        static void Update()
-        {
-            OutputString("DEBUG", $"js out: {jsOutput}");
-            OutputString("DEBUG", "update tick");
-
-            Clear();
-            OutputString("BUILD", "TYPE A PLAYERS NAME THEN PRESS <ENTER> TO SEARCH STATS");
-            Console.WriteLine();
-
-                
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"{DateTime.Now.ToString("HH:mm:ss")} | ");
-            string username = Console.ReadLine();
-            Console.ResetColor();
-
-            OutputString("BUILD", $"SEARCHING FOR {username}");
-            Console.WriteLine();
-
-            OutputString("BUILD", $"MOST PLAYED ATTACKER THIS SEASON: {SearchPlayerData(/*"abuseanddesfuse", "document.querySelector('#post-55 > div.post-inner > div > h1').textContent"*/)}");
-        }
-
-        private static string SearchPlayerData(/*string username, string jspath*/)
-        {
-            //browser.Load("https://r6.tracker.network/profile/pc/" + username + "/operators?seasonal=1");
-
-            System.IO.File.WriteAllText(@"H:\Desktop\output.txt", browser.GetSourceAsync().Result.ToString());
-            SendWebHookEmbed();
-
-            //string script = string.Format(jspath);
-            //browser.EvaluateScriptAsync(script).ContinueWith(x =>
-            //{
-            //    var response = x.Result;
-
-            //    if (response.Success && response.Result != null)
-            //    {
-            //        OutputString("DEBUG", "js response: " + response.Result.ToString());
-            //        return response.Result.ToString();
-            //    }
-            //    else
-            //    {
-            //        OutputString("DEBUG", "error!");
-            //        return null;
-            //    }
-            //});
-
-            return null;
-        }
-
-        static void Main(string[] args)
-        {
-            do
-            {
-                if (!started)
-                {
-                    Start();
-                }
-                else
-                {
-                    Update();
-                }
-            } while (!stop);
-
-            Environment.Exit(0);
-        }
-
-        static string JavaQuery(string script)
-        {
-            string output = "";
-
-            var scriptTask = browser.EvaluateScriptAsync(script);
-            scriptTask.ContinueWith(u =>
-            {
-                if (u.Result.Success && u.Result.Result != null)
-                {
-                    var response = u.Result.Result;
-                    output = response.ToString();
-                }
-            });
-
-            return output;
-        }
-
-        static void SendWebhookSimple(string messagetext)
-        {
-            R6DiscordBot.SendDiscordWebHookSimple(messagetext);
-            OutputString("DEBUG", $"sent simple webhook: {messagetext}");
-        }
-
-        static void SendWebHookEmbed()
-        {
-            R6DiscordBot.SendDiscordWebHookEmbeded("https://ubisoft-avatars.akamaized.net/28667467-87e8-4aa1-98de-9bdc047cd022/default_256_256.png", "R6 Detailed Stats: AbuseAndDesfuse", "https://morgan.games/", new DiscordEmbedField("top seasonal attackers", "GRIDLOCK, ACE"), new DiscordEmbedField("top seasonal defenders", "MAESTRO, KAID"), new DiscordEmbedField("rank", "Silver II (2,464 MMR)"), new DiscordEmbedField("last match info", "DEFEAT (K/D 0.40)"));
-            OutputString("DEBUG", $"sent embedded webhook");
-        }
-
-        static void OutputString(string type, string msg)
-        {
-            if (type.Contains("DEBUG") && !displayDebug)
-            {
-
+                var result = await _commands.ExecuteAsync(context, argPos, _services);
+                if (!result.IsSuccess) Console.WriteLine(result.ErrorReason);
             }
             else
             {
-                if (type.Contains("DEBUG"))
-                    Console.ForegroundColor = ConsoleColor.DarkGray;
-                else if (type.Contains("BUILD"))
-                    Console.ForegroundColor = ConsoleColor.White;
-                else if (type.Contains("INPUT"))
-                    Console.ForegroundColor = ConsoleColor.Green;
+                //await context.Channel.SendMessageAsync(message.ToString());
 
-                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} | {msg}");
+                checkFullStats(message.ToString(), context, "Couldn't find user: " + message.ToString());
+            
             }
-            Console.ResetColor();
         }
 
-        static void Clear()
+        public static async void checkFullStats(string username, SocketCommandContext context, string errorMssg)
         {
-            if (!displayDebug)
+            try
             {
-                Console.Clear();
-                OutputString("BUILD", $"VERSION: {version}");
+                HttpClient httpClient = new HttpClient();
+                var html = await httpClient.GetStringAsync("https://r6.tracker.network/profile/pc/" + username);
+                HtmlDocument page1 = new HtmlDocument();
+                page1.LoadHtml(html);
+
+                html = await httpClient.GetStringAsync("https://r6.tracker.network/profile/pc/" + username + "/operators?seasonal=1");
+                HtmlDocument page2 = new HtmlDocument();
+                page2.LoadHtml(html);
+
+                string KD = page1.DocumentNode.SelectSingleNode("//*[@id='profile']/div[3]/div[2]/div[1]/div[2]/div/span[2]").InnerText;
+                string HighestMMR = page1.DocumentNode.SelectSingleNode("//*[@id='profile']/div[3]/div[2]/div[3]/div[2]/div[1]/div[2]/div[2]/text()").InnerText;
+                string CurrentMMR = page1.DocumentNode.SelectSingleNode("//*[@id='profile']/div[3]/div[2]/div[1]/div[1]/div/div[2]/div[1]/div[2]").InnerText;
+                string attack = "not found";
+                string defend = "not found";
+
+                if (page2.DocumentNode.SelectSingleNode("//*[@id='operators-Attackers']/tbody/tr[1]/td[1]/span") != null)
+                    attack = page2.DocumentNode.SelectSingleNode("//*[@id='operators-Attackers']/tbody/tr[1]/td[1]/span").InnerText;
+                if (page2.DocumentNode.SelectSingleNode("//*[@id='operators-Defenders']/tbody/tr[1]/td[1]/span") != null)
+                    defend = page2.DocumentNode.SelectSingleNode("//*[@id='operators-Defenders']/tbody/tr[1]/td[1]/span").InnerText;
+
+                EmbedBuilder embed = new EmbedBuilder();
+
+                embed.AddField("Seasonal KD",
+                    KD)
+                    .WithFooter(footer => footer.Text = "R6 stats powered by Morgan Bot")
+                    .WithColor(Color.Red)
+                    .WithTitle("R6 Stats: " + username)
+                    .WithDescription("SEASONAL STATS FOR " + username.ToUpper())
+                    .WithUrl("https://r6.tracker.network/profile/pc/" + username)
+                    .WithCurrentTimestamp()
+                    .Build();
+                embed.AddField("Top Attackers: ", attack);
+                embed.AddField("Top Defenders: ", defend);
+                embed.AddField("Highest MMR: ", HighestMMR);
+                embed.AddField("Current MMR: ", CurrentMMR);
+
+                await context.Channel.SendMessageAsync(null, false, embed.Build(), null);
             }
-            else
+            catch(Exception ex)
             {
-                OutputString("DEBUG", "console.clear called");
+                await context.Channel.SendMessageAsync(errorMssg);
+                Console.WriteLine(ex.ToString());
             }
         }
-
     }
 }
