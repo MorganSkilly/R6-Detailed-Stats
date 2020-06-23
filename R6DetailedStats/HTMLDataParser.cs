@@ -65,7 +65,7 @@ namespace R6DetailedStats
             }
             else
             {
-                parsed = "DATA UNAVAILABLE";
+                parsed = "N/A";
                 Console.WriteLine("ERROR PARSING DATA");
             }
 
@@ -83,7 +83,7 @@ namespace R6DetailedStats
             }
             else
             {
-                parsed = "DATA UNAVAILABLE";
+                parsed = "N/A";
                 Console.WriteLine("ERROR PARSING DATA");
             }
 

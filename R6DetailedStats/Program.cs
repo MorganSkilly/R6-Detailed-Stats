@@ -19,8 +19,6 @@ namespace R6DetailedStats
         static private CommandService _commands;
         static private IServiceProvider _services;
 
-        private static bool isRunning = false;
-
         static void Main(string[] args) => new Program().RunBotAsync().GetAwaiter().GetResult();
         public async Task RunBotAsync()
         {
@@ -42,7 +40,7 @@ namespace R6DetailedStats
 
             await _client.StartAsync();
 
-            await Task.Delay(-1);
+            await Task.Delay(-1);            
         }
 
         private Task _client_Log(LogMessage arg)
