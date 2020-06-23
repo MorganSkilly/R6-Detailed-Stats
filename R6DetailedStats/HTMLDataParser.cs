@@ -1,5 +1,6 @@
 ﻿using HtmlAgilityPack;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -58,7 +59,7 @@ namespace R6DetailedStats
 
             if (doc.DocumentNode.SelectSingleNode(xPath) != null)
             {
-                parsed = doc.DocumentNode.SelectSingleNode(xPath).InnerText;
+                parsed = doc.DocumentNode.SelectSingleNode(xPath).InnerText.Trim();
 
                 if (parsed == "J&#196;GER")
                     parsed = "JÄGER";
